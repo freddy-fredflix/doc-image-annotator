@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { Button } from './components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './components/ui/card'
+import { Separator } from './components/ui/separator'
 import { ThemeToggle } from './components/ThemeToggle'
-import { KonvaCanvas, exportToPNG } from './components/KonvaCanvas'
+import { KonvaCanvas, exportCanvasToPNG } from './components/KonvaCanvas'
 import { 
   Image as ImageIcon, 
   Download, 
@@ -11,9 +13,9 @@ import {
   Square,
   Circle,
   Hash,
-  Upload
+  Upload,
+  Info
 } from 'lucide-react'
-import { cn } from './lib/utils'
 
 function App() {
   const [image, setImage] = useState(null)
@@ -49,8 +51,6 @@ function App() {
     reader.onload = (e) => {
       setImage({
         src: e.target.result,
-        width: 0,
-        height: 0,
       })
       setAnnotations([]) // Clear annotations when new image loads
     }
@@ -78,16 +78,21 @@ function App() {
 
   const handleExport = () => {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5)
-    exportToPNG(canvasRef, `annotated-${timestamp}.png`)
+    exportCanvasToPNG(canvasRef, `annotated-${timestamp}.png`)
   }
 
   const handleClearAnnotations = () => {
-    if (window.confirm('Clear all annotations?')) {
+    if (window.confirm('Clear all annotations? This cannot be undone.')) {
       setAnnotations([])
     }
   }
 
   const handleNewImage = () => {
+    if (annotations.length > 0) {
+      if (!window.confirm('Load a new image? Current annotations will be lost.')) {
+        return
+      }
+    }
     setImage(null)
     setAnnotations([])
     if (fileInputRef.current) {
@@ -96,61 +101,63 @@ function App() {
   }
 
   const tools = [
-    { id: 'select', icon: MousePointer2, label: 'Select', description: 'Select and move' },
-    { id: 'marker', icon: Hash, label: 'Marker', description: 'Numbered markers' },
-    { id: 'text', icon: Type, label: 'Text', description: 'Text annotation' },
-    { id: 'rect', icon: Square, label: 'Rectangle', description: 'Highlight area' },
-    { id: 'circle', icon: Circle, label: 'Circle', description: 'Circular highlight' },
+    { id: 'select', icon: MousePointer2, label: 'Select', description: 'Select and move annotations' },
+    { id: 'marker', icon: Hash, label: 'Marker', description: 'Add numbered markers with optional labels' },
+    { id: 'text', icon: Type, label: 'Text', description: 'Add text annotations' },
+    { id: 'rect', icon: Square, label: 'Rectangle', description: 'Draw rectangles to highlight areas' },
+    { id: 'circle', icon: Circle, label: 'Circle', description: 'Draw circles to highlight areas' },
   ]
 
   if (!image) {
     return (
-      <div className="min-h-screen flex flex-col bg-background">
-        <header className="border-b bg-card">
+      <div className="min-h-screen flex flex-col">
+        <header className="border-b">
           <div className="container mx-auto px-6 py-4 flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold">Documentation Image Annotator</h1>
-              <p className="text-sm text-muted-foreground">Fast, opinionated tool for instruction images</p>
+              <p className="text-sm text-muted-foreground">Fast, opinionated tool for creating instruction images</p>
             </div>
             <ThemeToggle />
           </div>
         </header>
 
         <main className="flex-1 flex items-center justify-center p-8">
-          <div
-            className="w-full max-w-2xl border-2 border-dashed border-border rounded-lg p-12 text-center bg-card hover:border-primary/50 transition-colors cursor-pointer"
-            onDragOver={handleDragOver}
-            onDrop={handleDrop}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleFileUpload}
-              className="hidden"
-            />
-            <div className="flex flex-col items-center gap-4">
-              <div className="rounded-full bg-primary/10 p-6">
-                <ImageIcon className="w-12 h-12 text-primary" />
-              </div>
-              <div>
-                <h2 className="text-xl font-semibold mb-2">Upload or paste an image</h2>
-                <p className="text-muted-foreground mb-2">
-                  Drag and drop, click to browse, or press <kbd className="px-2 py-1 bg-muted rounded text-xs">Ctrl/Cmd + V</kbd> to paste
-                </p>
-                <p className="text-sm text-muted-foreground">PNG, JPG, or other image formats</p>
+          <Card className="w-full max-w-2xl">
+            <div
+              className="p-12 text-center cursor-pointer hover:bg-accent/50 transition-colors rounded-lg"
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+              <div className="flex flex-col items-center gap-6">
+                <div className="rounded-full bg-primary/10 p-8">
+                  <ImageIcon className="w-16 h-16 text-primary" />
+                </div>
+                <div className="space-y-2">
+                  <h2 className="text-2xl font-semibold">Upload or paste an image</h2>
+                  <p className="text-muted-foreground">
+                    Drag and drop, click to browse, or press <kbd className="px-2 py-1 bg-muted rounded text-xs font-mono">Ctrl/Cmd + V</kbd> to paste from clipboard
+                  </p>
+                  <p className="text-sm text-muted-foreground">Supports PNG, JPG, and other common image formats</p>
+                </div>
               </div>
             </div>
-          </div>
+          </Card>
         </main>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
-      <header className="border-b bg-card">
+    <div className="h-screen flex flex-col">
+      <header className="border-b shrink-0">
         <div className="container mx-auto px-6 py-3 flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold">Documentation Image Annotator</h1>
@@ -165,71 +172,143 @@ function App() {
         </div>
       </header>
 
-      <div className="flex-1 flex gap-4 p-4 overflow-hidden">
-        {/* Toolbar */}
-        <aside className="w-64 flex flex-col gap-4">
-          <div className="bg-card rounded-lg border p-4">
-            <h3 className="text-sm font-semibold mb-3 text-muted-foreground uppercase tracking-wide">
-              Tools
-            </h3>
-            <div className="flex flex-col gap-2">
-              {tools.map((t) => {
-                const Icon = t.icon
-                return (
-                  <Button
-                    key={t.id}
-                    variant={tool === t.id ? 'default' : 'outline'}
-                    className="justify-start"
-                    onClick={() => setTool(t.id)}
-                  >
-                    <Icon className="w-4 h-4 mr-2" />
-                    <span>{t.label}</span>
-                  </Button>
-                )
-              })}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Sidebar */}
+        <aside className="w-80 border-r bg-card flex flex-col overflow-y-auto">
+          <div className="p-6 space-y-6">
+            {/* Tools Section */}
+            <div>
+              <h3 className="text-sm font-semibold mb-3 text-muted-foreground uppercase tracking-wide">
+                Annotation Tools
+              </h3>
+              <div className="space-y-2">
+                {tools.map((t) => {
+                  const Icon = t.icon
+                  return (
+                    <Button
+                      key={t.id}
+                      variant={tool === t.id ? 'default' : 'outline'}
+                      className="w-full justify-start"
+                      onClick={() => setTool(t.id)}
+                    >
+                      <Icon className="w-4 h-4 mr-3" />
+                      <span>{t.label}</span>
+                    </Button>
+                  )
+                })}
+              </div>
             </div>
-            <div className="mt-4 p-3 bg-muted/50 rounded text-xs text-muted-foreground">
-              <strong>Tip:</strong> {tools.find(t => t.id === tool)?.description}
-            </div>
-          </div>
 
-          <div className="bg-card rounded-lg border p-4">
-            <h3 className="text-sm font-semibold mb-3 text-muted-foreground uppercase tracking-wide">
-              Actions
-            </h3>
-            <div className="flex flex-col gap-2">
-              <Button variant="outline" onClick={handleClearAnnotations}>
-                <Trash2 className="w-4 h-4 mr-2" />
-                Clear All
-              </Button>
-              <Button onClick={handleExport} className="bg-green-600 hover:bg-green-700">
-                <Download className="w-4 h-4 mr-2" />
-                Export PNG
-              </Button>
-            </div>
-          </div>
+            <Separator />
 
-          <div className="bg-card rounded-lg border p-4 text-xs text-muted-foreground">
-            <p className="mb-2"><strong>Keyboard shortcuts:</strong></p>
-            <ul className="space-y-1">
-              <li>• <kbd className="px-1 bg-muted rounded">Ctrl/Cmd+V</kbd> Paste image</li>
-              <li>• Drag annotations to move</li>
-              <li>• Click to select</li>
-            </ul>
+            {/* Current Tool Info */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Info className="w-4 h-4" />
+                  Current Tool
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  {tools.find(t => t.id === tool)?.description}
+                </p>
+              </CardContent>
+            </Card>
+
+            <Separator />
+
+            {/* Actions Section */}
+            <div>
+              <h3 className="text-sm font-semibold mb-3 text-muted-foreground uppercase tracking-wide">
+                Actions
+              </h3>
+              <div className="space-y-2">
+                <Button 
+                  variant="outline" 
+                  className="w-full justify-start"
+                  onClick={handleClearAnnotations}
+                  disabled={annotations.length === 0}
+                >
+                  <Trash2 className="w-4 h-4 mr-3" />
+                  Clear All Annotations
+                </Button>
+                <Button 
+                  className="w-full justify-start bg-green-600 hover:bg-green-700"
+                  onClick={handleExport}
+                  disabled={annotations.length === 0}
+                >
+                  <Download className="w-4 h-4 mr-3" />
+                  Export as PNG
+                </Button>
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Info Card */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm">Keyboard Shortcuts</CardTitle>
+              </CardHeader>
+              <CardContent className="text-xs text-muted-foreground space-y-1">
+                <div className="flex justify-between">
+                  <span>Paste image:</span>
+                  <kbd className="px-2 py-0.5 bg-muted rounded font-mono">Ctrl/Cmd+V</kbd>
+                </div>
+                <div className="flex justify-between">
+                  <span>Move annotation:</span>
+                  <span>Click & drag</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Deselect:</span>
+                  <span>Click empty area</span>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Stats */}
+            {annotations.length > 0 && (
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm">Document Stats</CardTitle>
+                </CardHeader>
+                <CardContent className="text-xs text-muted-foreground">
+                  <div className="space-y-1">
+                    <div className="flex justify-between">
+                      <span>Total annotations:</span>
+                      <span className="font-semibold text-foreground">{annotations.length}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Markers:</span>
+                      <span className="font-semibold text-foreground">
+                        {annotations.filter(a => a.type === 'marker').length}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Shapes:</span>
+                      <span className="font-semibold text-foreground">
+                        {annotations.filter(a => a.type === 'rect' || a.type === 'circle').length}
+                      </span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
         </aside>
 
-        {/* Canvas */}
-        <main className="flex-1">
-          <KonvaCanvas
-            image={image}
-            tool={tool}
-            annotations={annotations}
-            setAnnotations={setAnnotations}
-            onImageLoad={(dims) => {
-              setImage({ ...image, ...dims })
-            }}
-          />
+        {/* Canvas Area */}
+        <main className="flex-1 p-6 overflow-hidden">
+          <div className="w-full h-full rounded-lg border bg-card shadow-sm overflow-hidden">
+            <KonvaCanvas
+              ref={canvasRef}
+              image={image}
+              tool={tool}
+              annotations={annotations}
+              setAnnotations={setAnnotations}
+            />
+          </div>
         </main>
       </div>
     </div>

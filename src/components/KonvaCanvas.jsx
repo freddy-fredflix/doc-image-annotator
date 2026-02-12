@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { Stage, Layer, Image as KonvaImage, Circle, Rect, Text, Group, Line } from 'react-konva'
+import React, { useEffect, useRef, useState } from 'react'
+import { Stage, Layer, Image as KonvaImage, Circle, Rect, Text, Group } from 'react-konva'
 import useImage from 'use-image'
 
 /**
@@ -10,7 +10,6 @@ import useImage from 'use-image'
  * - Built-in object selection, dragging, transforming
  * - Excellent performance on large images
  * - Native export to PNG at any resolution
- * - Active maintenance and good documentation
  * - Hit-testing and event handling work reliably
  * 
  * Alternatives considered:
@@ -79,7 +78,7 @@ function NumberMarker({ annotation, isSelected, onSelect, onChange }) {
       {annotation.label && (
         <Group x={32} y={-12}>
           <Rect
-            width={annotation.label.length * 8 + 16}
+            width={Math.max(annotation.label.length * 8 + 16, 80)}
             height={32}
             fill="rgba(255,255,255,0.95)"
             stroke={style.stroke}
@@ -94,7 +93,7 @@ function NumberMarker({ annotation, isSelected, onSelect, onChange }) {
             fontSize={14}
             fill="#1f2937"
             padding={8}
-            width={annotation.label.length * 8 + 16}
+            width={Math.max(annotation.label.length * 8 + 16, 80)}
             height={32}
             verticalAlign="middle"
           />
@@ -105,6 +104,8 @@ function NumberMarker({ annotation, isSelected, onSelect, onChange }) {
 }
 
 function TextAnnotation({ annotation, isSelected, onSelect, onChange }) {
+  const textWidth = Math.max(annotation.text.length * 9 + 16, 100)
+  
   return (
     <Group
       x={annotation.x}
@@ -121,7 +122,7 @@ function TextAnnotation({ annotation, isSelected, onSelect, onChange }) {
       }}
     >
       <Rect
-        width={annotation.text.length * 9 + 16}
+        width={textWidth}
         height={36}
         fill={isSelected ? 'rgba(59, 130, 246, 0.95)' : 'rgba(255,255,255,0.95)'}
         stroke="#3b82f6"
@@ -136,7 +137,7 @@ function TextAnnotation({ annotation, isSelected, onSelect, onChange }) {
         fontSize={16}
         fill={isSelected ? '#ffffff' : '#1f2937'}
         padding={8}
-        width={annotation.text.length * 9 + 16}
+        width={textWidth}
         height={36}
         verticalAlign="middle"
       />
@@ -195,53 +196,46 @@ function CircleAnnotation({ annotation, isSelected, onSelect, onChange }) {
   )
 }
 
-export function KonvaCanvas({ image, tool, annotations, setAnnotations, onImageLoad }) {
+export const KonvaCanvas = React.forwardRef(({ image, tool, annotations, setAnnotations }, ref) => {
   const [img] = useImage(image?.src)
   const [selectedId, setSelectedId] = useState(null)
   const [isDrawing, setIsDrawing] = useState(false)
   const [tempShape, setTempShape] = useState(null)
-  const stageRef = useRef(null)
+  const stageRef = ref || useRef(null)
   const containerRef = useRef(null)
-  const [stageDimensions, setStageDimensions] = useState({ width: 1000, height: 800 })
+  const [dimensions, setDimensions] = useState({ width: 800, height: 600 })
 
-  useEffect(() => {
-    if (img && onImageLoad) {
-      onImageLoad({ width: img.width, height: img.height })
-    }
-  }, [img, onImageLoad])
-
+  // Update dimensions to match container
   useEffect(() => {
     const updateSize = () => {
       if (containerRef.current) {
-        setStageDimensions({
-          width: containerRef.current.offsetWidth,
-          height: containerRef.current.offsetHeight,
+        const container = containerRef.current
+        setDimensions({
+          width: container.offsetWidth,
+          height: container.offsetHeight,
         })
       }
     }
+    
     updateSize()
     window.addEventListener('resize', updateSize)
     return () => window.removeEventListener('resize', updateSize)
   }, [])
 
-  const getPointerPosition = (stage) => {
-    const pos = stage.getPointerPosition()
-    if (!pos) return null
-    
-    // Adjust for stage scale/position if needed
-    return {
-      x: pos.x,
-      y: pos.y,
+  const handleStageClick = (e) => {
+    // Click on empty area
+    if (e.target === e.target.getStage()) {
+      setSelectedId(null)
     }
   }
 
-  const handleMouseDown = (e) => {
-    if (e.target !== e.target.getStage()) return // Clicked on an annotation
+  const handleStageMouseDown = (e) => {
+    // Only handle if clicking on the stage background (not on an annotation)
+    if (e.target !== e.target.getStage()) return
     
     const stage = e.target.getStage()
-    const pos = getPointerPosition(stage)
-    if (!pos) return
-
+    const pointerPosition = stage.getPointerPosition()
+    
     setSelectedId(null)
 
     if (tool === 'marker') {
@@ -250,10 +244,10 @@ export function KonvaCanvas({ image, tool, annotations, setAnnotations, onImageL
       setAnnotations([
         ...annotations,
         {
-          id: Date.now(),
+          id: `marker-${Date.now()}`,
           type: 'marker',
-          x: pos.x,
-          y: pos.y,
+          x: pointerPosition.x,
+          y: pointerPosition.y,
           number,
           label,
           style: 'primary',
@@ -265,10 +259,10 @@ export function KonvaCanvas({ image, tool, annotations, setAnnotations, onImageL
         setAnnotations([
           ...annotations,
           {
-            id: Date.now(),
+            id: `text-${Date.now()}`,
             type: 'text',
-            x: pos.x,
-            y: pos.y,
+            x: pointerPosition.x,
+            y: pointerPosition.y,
             text,
           },
         ])
@@ -277,35 +271,30 @@ export function KonvaCanvas({ image, tool, annotations, setAnnotations, onImageL
       setIsDrawing(true)
       setTempShape({
         type: tool,
-        startX: pos.x,
-        startY: pos.y,
-        x: pos.x,
-        y: pos.y,
-        width: 0,
-        height: 0,
-        radius: 0,
+        startX: pointerPosition.x,
+        startY: pointerPosition.y,
       })
     }
   }
 
-  const handleMouseMove = (e) => {
-    if (!isDrawing || !tempShape) return
-
+  const handleStageMouseMove = (e) => {
+    if (!isDrawing) return
+    
     const stage = e.target.getStage()
-    const pos = getPointerPosition(stage)
-    if (!pos) return
+    const pointerPosition = stage.getPointerPosition()
 
     if (tempShape.type === 'rect') {
       setTempShape({
         ...tempShape,
-        x: Math.min(pos.x, tempShape.startX),
-        y: Math.min(pos.y, tempShape.startY),
-        width: Math.abs(pos.x - tempShape.startX),
-        height: Math.abs(pos.y - tempShape.startY),
+        x: Math.min(pointerPosition.x, tempShape.startX),
+        y: Math.min(pointerPosition.y, tempShape.startY),
+        width: Math.abs(pointerPosition.x - tempShape.startX),
+        height: Math.abs(pointerPosition.y - tempShape.startY),
       })
     } else if (tempShape.type === 'circle') {
       const radius = Math.sqrt(
-        Math.pow(pos.x - tempShape.startX, 2) + Math.pow(pos.y - tempShape.startY, 2)
+        Math.pow(pointerPosition.x - tempShape.startX, 2) +
+        Math.pow(pointerPosition.y - tempShape.startY, 2)
       )
       setTempShape({
         ...tempShape,
@@ -314,14 +303,14 @@ export function KonvaCanvas({ image, tool, annotations, setAnnotations, onImageL
     }
   }
 
-  const handleMouseUp = () => {
-    if (!isDrawing || !tempShape) return
+  const handleStageMouseUp = () => {
+    if (!isDrawing) return
 
-    if (tempShape.type === 'rect' && tempShape.width > 5 && tempShape.height > 5) {
+    if (tempShape.type === 'rect' && tempShape.width > 10 && tempShape.height > 10) {
       setAnnotations([
         ...annotations,
         {
-          id: Date.now(),
+          id: `rect-${Date.now()}`,
           type: 'rect',
           x: tempShape.x,
           y: tempShape.y,
@@ -330,11 +319,11 @@ export function KonvaCanvas({ image, tool, annotations, setAnnotations, onImageL
           style: 'warning',
         },
       ])
-    } else if (tempShape.type === 'circle' && tempShape.radius > 5) {
+    } else if (tempShape.type === 'circle' && tempShape.radius > 10) {
       setAnnotations([
         ...annotations,
         {
-          id: Date.now(),
+          id: `circle-${Date.now()}`,
           type: 'circle',
           x: tempShape.startX,
           y: tempShape.startY,
@@ -355,20 +344,27 @@ export function KonvaCanvas({ image, tool, annotations, setAnnotations, onImageL
   }
 
   return (
-    <div ref={containerRef} className="w-full h-full bg-muted/20 rounded-lg overflow-hidden">
+    <div ref={containerRef} className="w-full h-full flex items-center justify-center bg-muted/20">
       <Stage
         ref={stageRef}
-        width={stageDimensions.width}
-        height={stageDimensions.height}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onTouchStart={handleMouseDown}
-        onTouchMove={handleMouseMove}
-        onTouchEnd={handleMouseUp}
+        width={dimensions.width}
+        height={dimensions.height}
+        onClick={handleStageClick}
+        onMouseDown={handleStageMouseDown}
+        onMouseMove={handleStageMouseMove}
+        onMouseUp={handleStageMouseUp}
+        onTouchStart={handleStageMouseDown}
+        onTouchMove={handleStageMouseMove}
+        onTouchEnd={handleStageMouseUp}
       >
         <Layer>
-          {img && <KonvaImage image={img} />}
+          {img && (
+            <KonvaImage
+              image={img}
+              x={(dimensions.width - img.width) / 2}
+              y={(dimensions.height - img.height) / 2}
+            />
+          )}
           
           {annotations.map((annotation) => {
             const isSelected = annotation.id === selectedId
@@ -388,7 +384,7 @@ export function KonvaCanvas({ image, tool, annotations, setAnnotations, onImageL
           })}
 
           {/* Live preview for shape being drawn */}
-          {isDrawing && tempShape && tempShape.type === 'rect' && (
+          {isDrawing && tempShape && tempShape.type === 'rect' && tempShape.width > 0 && (
             <Rect
               x={tempShape.x}
               y={tempShape.y}
@@ -400,7 +396,7 @@ export function KonvaCanvas({ image, tool, annotations, setAnnotations, onImageL
               opacity={0.7}
             />
           )}
-          {isDrawing && tempShape && tempShape.type === 'circle' && (
+          {isDrawing && tempShape && tempShape.type === 'circle' && tempShape.radius > 0 && (
             <Circle
               x={tempShape.startX}
               y={tempShape.startY}
@@ -415,14 +411,18 @@ export function KonvaCanvas({ image, tool, annotations, setAnnotations, onImageL
       </Stage>
     </div>
   )
-}
+})
 
-export function exportToPNG(stageRef, filename = 'annotated-image.png') {
+KonvaCanvas.displayName = 'KonvaCanvas'
+
+export function exportCanvasToPNG(stageRef, filename = 'annotated-image.png') {
   if (!stageRef.current) return
 
-  const uri = stageRef.current.toDataURL({ pixelRatio: 1 })
+  const uri = stageRef.current.toDataURL({ pixelRatio: 2 })
   const link = document.createElement('a')
   link.download = filename
   link.href = uri
+  document.body.appendChild(link)
   link.click()
+  document.body.removeChild(link)
 }
