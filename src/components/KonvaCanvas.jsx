@@ -16,23 +16,29 @@ import useImage from 'use-image'
  * - Fabric.js: More features but less React-idiomatic
  * - tldraw: Too opinionated for our use case, harder to constrain
  * - Custom canvas: Too brittle for complex interactions
+ * 
+ * Note on colors:
+ * - Annotation colors are hardcoded because Konva renders to canvas
+ * - Canvas needs actual color values, not CSS variables
+ * - These colors are chosen to be visible in both light and dark modes
+ * - They're optimized for documentation screenshots and printing
  */
 
 const ANNOTATION_STYLES = {
   primary: {
-    fill: '#3b82f6',
-    stroke: '#2563eb',
-    textColor: '#ffffff',
+    fill: '#3b82f6',      // Blue - high contrast for numbered markers
+    stroke: '#2563eb',    // Darker blue for borders
+    textColor: '#ffffff', // White text for readability
   },
   warning: {
-    fill: '#f59e0b',
-    stroke: '#d97706',
-    textColor: '#ffffff',
+    fill: '#f59e0b',      // Amber - for highlighting/attention
+    stroke: '#d97706',    // Darker amber for borders
+    textColor: '#ffffff', // White text for readability
   },
   info: {
-    fill: '#06b6d4',
-    stroke: '#0891b2',
-    textColor: '#ffffff',
+    fill: '#06b6d4',      // Cyan - for informational highlights
+    stroke: '#0891b2',    // Darker cyan for borders
+    textColor: '#ffffff', // White text for readability
   },
 }
 

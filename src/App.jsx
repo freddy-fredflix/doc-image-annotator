@@ -234,7 +234,7 @@ function App() {
                   Clear All Annotations
                 </Button>
                 <Button 
-                  className="w-full justify-start bg-green-600 hover:bg-green-700"
+                  className="w-full justify-start"
                   onClick={handleExport}
                   disabled={annotations.length === 0}
                 >
